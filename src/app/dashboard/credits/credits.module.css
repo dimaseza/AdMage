@@ -1,0 +1,203 @@
+.title {
+  font-size: 2rem;
+  margin-bottom: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+/* ---- current balance ---- */
+
+.balance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 2.5rem;
+}
+
+.balanceLabel {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.balanceValue {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--primary-color);
+}
+
+.balanceValue span {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.balanceMeta {
+  text-align: right;
+}
+
+.balancePlan {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.balanceHint {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* ---- plan grid ---- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.75rem 1.5rem;
+}
+
+.popular {
+  border: 1px solid var(--primary-color);
+}
+
+.badge {
+  position: absolute;
+  top: -0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary-color);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.planName {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.price {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.per {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.credits {
+  margin-top: 0.35rem;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.tagline {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  min-height: 2.5rem;
+}
+
+.allowance {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  flex: 1;
+}
+
+.allowance li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+}
+
+.allowance strong {
+  color: var(--text-primary, #fff);
+  font-weight: 700;
+  min-width: 2.25rem;
+}
+
+.muted {
+  opacity: 0.55;
+}
+
+/* ---- cost reference ---- */
+
+.costs {
+  padding: 1.75rem;
+}
+
+.costsTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.costsNote {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+  max-width: 62ch;
+  line-height: 1.6;
+}
+
+.costList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.75rem;
+}
+
+.costList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  font-size: 0.9375rem;
+}
+
+.costList span {
+  font-weight: 700;
+  color: var(--primary-color);
+  white-space: nowrap;
+}
+
+.sectionHeading {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.costs {
+  margin-top: 2.5rem;
+}

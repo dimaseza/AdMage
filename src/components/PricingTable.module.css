@@ -1,0 +1,211 @@
+/* Horizontal scroll lives here so the page body never scrolls sideways. */
+.wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: var(--glass-blur);
+}
+
+.table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  caption-side: bottom;
+  text-align: left;
+}
+
+.caption {
+  padding: 1.25rem 1.5rem 1.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  text-align: left;
+  border-top: 1px solid var(--glass-border);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- header ---- */
+
+.corner {
+  width: 26%;
+  min-width: 190px;
+  padding: 1.25rem 1.5rem;
+  background: transparent;
+}
+
+.planHead {
+  position: relative;
+  vertical-align: bottom;
+  padding: 1.5rem 1rem 1.25rem;
+  text-align: center;
+  font-weight: 400;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.tag,
+.tagSpacer {
+  display: block;
+  height: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tag {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--primary-color);
+  line-height: 1.5rem;
+}
+
+.planName {
+  display: block;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.35rem;
+}
+
+.planPrice {
+  display: block;
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.per {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.planTagline {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* ---- rows ---- */
+
+.rowHead {
+  padding: 0.9rem 1.5rem;
+  font-weight: 500;
+  border-bottom: 1px solid var(--glass-border);
+  vertical-align: middle;
+}
+
+.rowLabel {
+  display: block;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.rowHint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.cell {
+  padding: 0.9rem 1rem;
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+.cellEmpty {
+  color: var(--text-secondary);
+  font-weight: 400;
+  opacity: 0.55;
+}
+
+.rowEmphasis .cell {
+  font-size: 1.0625rem;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.rowEmphasis .rowLabel {
+  font-weight: 700;
+}
+
+/* ---- highlighted columns ---- */
+
+.colPopular {
+  background: rgba(99, 102, 241, 0.07);
+}
+
+.colCurrent {
+  background: rgba(16, 185, 129, 0.07);
+}
+
+.colCurrent .tag {
+  color: var(--success);
+}
+
+/* ---- actions ---- */
+
+.ctaCell {
+  padding: 1.25rem 1rem 1.5rem;
+}
+
+.btnGhost {
+  display: block;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.btnGhost:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.currentBtn {
+  display: block;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-pill);
+  border: 1px dashed rgba(16, 185, 129, 0.5);
+  color: var(--success);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .caption {
+    padding: 1rem 1.15rem 1.25rem;
+  }
+  .corner,
+  .rowHead {
+    padding-left: 1.15rem;
+    padding-right: 1.15rem;
+  }
+}

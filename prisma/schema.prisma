@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid // Matches Supabase Auth user ID
+  email     String   @unique
+  credits   Int      @default(0)
+  tier      String   @default("FREE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  generations Generation[]
+}
+
+model Generation {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  user              User     @relation(fields: [userId], references: [id])
+  type              String
+  resultUrl         String?
+  resultUrls        String[] @default([])
+  providerRequestId String?
+  creditCost        Int
+  status            String   @default("PENDING")
+  createdAt         DateTime @default(now())
+}
