@@ -53,7 +53,7 @@ export default function GalleryPage() {
           onClick={() => setSelectedMedia(null)}
           style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
         >
-          {selectedMedia.type === 'video' ? (
+          {selectedMedia.type === 'video' || selectedMedia.type === 'ugc' ? (
             <video src={selectedMedia.url} controls autoPlay style={{ maxHeight: '90vh', maxWidth: '90vw', borderRadius: '8px' }} />
           ) : (
             <img src={selectedMedia.url} alt="Expanded" style={{ maxHeight: '90vh', maxWidth: '90vw', objectFit: 'contain', borderRadius: '8px' }} />
@@ -86,7 +86,7 @@ export default function GalleryPage() {
                 style={{ cursor: gen.status === 'COMPLETED' ? 'zoom-in' : 'default' }}
               >
                 {gen.status === 'COMPLETED' && gen.resultUrl ? (
-                  gen.type === 'video' ? (
+                  gen.type === 'video' || gen.type === 'ugc' ? (
                     <video src={gen.resultUrl} className={styles.media} />
                   ) : (
                     <img src={gen.resultUrl} alt={gen.type} className={styles.media} />

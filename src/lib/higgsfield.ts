@@ -16,6 +16,10 @@ export interface HiggsfieldGenerationRequest {
   aspect_ratio?: string;
   quality?: string;
   resolution?: string;
+  /** Quality tier for models that take it in the body (Kling O3: std/pro/4k). */
+  mode?: string;
+  /** Kling O3 generates audio only when this is 'on'; it defaults to off. */
+  sound?: 'on' | 'off';
   num_images?: number;
   duration?: number;
   negative_prompt?: string;

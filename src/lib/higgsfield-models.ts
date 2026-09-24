@@ -20,6 +20,7 @@
 import {
   IMAGE_CREDITS,
   VIDEO_CREDITS_PER_SECOND,
+  UGC_CREDITS_PER_SECOND as PUBLISHED_UGC_CREDITS_PER_SECOND,
   type ImageModelKey,
 } from './credit-costs';
 
@@ -34,6 +35,10 @@ export type ModelCapabilities = {
   durationRange?: readonly [number, number];
   /** image-to-video models take a single `image_url` instead of `image_urls`. */
   singleImageField?: 'image_url';
+  /** Models that tier quality via a `mode` body field rather than the endpoint. */
+  modes?: readonly string[];
+  /** Models that accept an on/off `sound` flag (Kling O3 generates audio). */
+  supportsSound?: boolean;
   /** Higgsfield credit cost keyed by `${quality}:${resolution}`. See PRICING below. */
   prices?: Readonly<Record<string, number>>;
 };
@@ -223,6 +228,74 @@ export function videoCreditsPerSecond(resolution: string | undefined): number {
 }
 
 /* ------------------------------------------------------------------ *
+ * UGC
+ *
+ * UGC Creator must NOT use the v3.0 image-to-video endpoints. Those take the
+ * uploaded image as the literal FIRST FRAME, so a white-background packshot
+ * yields a clip that opens on a static packshot and then cuts to the scene -
+ * the opposite of content that looks filmed by a real person.
+ *
+ * `kling-video/o3/image-reference` instead treats the image as a REFERENCE for
+ * the product's identity, leaving the model free to compose a populated scene
+ * from frame one while keeping the product faithful.
+ *
+ * Contract verified 2026-09-22 against POST /estimate/kling-video/o3/image-reference
+ * (which validates strictly but never queues, so it is safe to probe):
+ *   prompt        required
+ *   image_urls    array of URL strings - NOTE: `image_url` singular is SILENTLY
+ *                 IGNORED here, which would drop the product reference entirely
+ *   duration      integer 3-15
+ *   aspect_ratio  '16:9' | '9:16' | '1:1' - validated even WITH images attached,
+ *                 unlike v3.0 image-to-video which infers it from the frame
+ *   mode          'std' | 'pro' | '4k' - '4k' returns "temporarily unavailable"
+ *                 on this account, so only std/pro are real options
+ * Cost is linear in duration and unchanged by the number of reference images.
+ * ------------------------------------------------------------------ */
+
+export const UGC_DURATION_RANGE = [3, 15] as const;
+const UGC_ASPECT_RATIOS = ['9:16', '1:1', '16:9'] as const;
+
+export const UGC_MODES = ['std', 'pro'] as const;
+export type UgcMode = (typeof UGC_MODES)[number];
+
+/**
+ * Cost is additive and verified 2026-09-22: `pro` and `sound: 'on'` each add
+ * exactly one upgrade step of 0.3808 HF credits/s over the 1.1424 base, so
+ * pro+silent and std+sound cost the same, and pro+sound costs two steps.
+ */
+const UGC_HF_BASE_PER_SECOND = 1.1424;
+const UGC_HF_UPGRADE_PER_SECOND = 0.3808;
+
+export function ugcHfCreditsPerSecond(mode: string | undefined, sound: boolean): number {
+  return (
+    UGC_HF_BASE_PER_SECOND +
+    (resolveUgcMode(mode) === 'pro' ? UGC_HF_UPGRADE_PER_SECOND : 0) +
+    (sound ? UGC_HF_UPGRADE_PER_SECOND : 0)
+  );
+}
+
+export function resolveUgcMode(mode: string | undefined): UgcMode {
+  return mode === 'pro' ? 'pro' : 'std';
+}
+
+/** Key into the published price table. */
+export function ugcCostKey(mode: string | undefined, sound: boolean): string {
+  return `${resolveUgcMode(mode)}:${sound ? 'on' : 'off'}`;
+}
+
+export function ugcModel(mode: string | undefined): ModelCapabilities {
+  return {
+    slug: 'kling-video/o3/image-reference',
+    // The generator offers one reference upload; the model accepts several.
+    maxImages: 2,
+    aspectRatios: UGC_ASPECT_RATIOS,
+    durationRange: UGC_DURATION_RANGE,
+    modes: [resolveUgcMode(mode)],
+    supportsSound: true,
+  };
+}
+
+/* ------------------------------------------------------------------ *
  * Clamping
  * ------------------------------------------------------------------ */
 
@@ -285,6 +358,24 @@ export function assertPublishedCreditsMatchCost(): void {
         `Credit table drift: video ${tier} is published as ` +
           `${VIDEO_CREDITS_PER_SECOND[tier]} but charges ${cfg.creditsPerSecond}.`
       );
+    }
+  }
+
+  // Every UGC combination must be published, and none may sell below cost.
+  for (const mode of UGC_MODES) {
+    for (const sound of [false, true]) {
+      const key = ugcCostKey(mode, sound);
+      const published = PUBLISHED_UGC_CREDITS_PER_SECOND[key];
+      if (published === undefined) {
+        throw new Error(`Credit table drift: ugc ${key} has no published price.`);
+      }
+      const atCost = ugcHfCreditsPerSecond(mode, sound) * APP_CREDITS_AT_COST;
+      if (published <= atCost) {
+        throw new Error(
+          `UGC sells below cost: ${key} charges ${published} credits/s against ` +
+            `${atCost.toFixed(3)} at cost.`
+        );
+      }
     }
   }
 }

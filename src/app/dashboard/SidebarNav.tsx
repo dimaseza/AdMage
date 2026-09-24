@@ -12,6 +12,7 @@ export default function SidebarNav() {
     { href: '/dashboard/product-shot', label: 'Product Shots' },
     { href: '/dashboard/campaign', label: 'Campaigns' },
     { href: '/dashboard/video', label: 'Video Ads' },
+    { href: '/dashboard/ugc', label: 'UGC Creator' },
     { href: '/dashboard/gallery', label: 'Gallery' },
   ];
 

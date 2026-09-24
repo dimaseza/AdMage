@@ -12,6 +12,10 @@ import {
   VIDEO_RESOLUTIONS,
   VIDEO_TIER_LABELS,
   VIDEO_DURATIONS,
+  UGC_MODES,
+  UGC_MODE_LABELS,
+  UGC_MODEL_LABEL,
+  ugcCreditsPerSecond,
   resolveVideoTier,
   videoCreditsPerSecond,
   imageCreditsFor,
@@ -21,7 +25,7 @@ import {
 interface GenerationInterfaceProps {
   title: string;
   description: string;
-  type: 'refine' | 'product-shot' | 'campaign' | 'video';
+  type: 'refine' | 'product-shot' | 'campaign' | 'video' | 'ugc';
   requiresImage: boolean;
 }
 
@@ -64,7 +68,19 @@ const FEATURE_CAPS = {
     aspectRatios: ['16:9', '1:1', '9:16'],
     supportsStyleRef: false,
   },
+  ugc: {
+    // Kling O3 takes its tier as a `mode` body field (std/pro), not a `quality`
+    // or `resolution` field, so this picker drives `mode`.
+    qualities: UGC_MODES as readonly string[],
+    resolutions: [] as readonly string[],
+    // UGC clips are made for vertical social feeds first. Unlike plain
+    // image-to-video, O3 image-reference actually honours this with an image attached.
+    aspectRatios: ['9:16', '1:1', '16:9'],
+    supportsStyleRef: false,
+  },
 } as const;
+
+const isVideoLike = (type: GenerationInterfaceProps['type']) => type === 'video' || type === 'ugc';
 
 
 export default function GenerationInterface({ title, description, type, requiresImage }: GenerationInterfaceProps) {
@@ -78,13 +94,17 @@ export default function GenerationInterface({ title, description, type, requires
   const caps = FEATURE_CAPS[type];
 
   // Advanced Settings
-  const [aspectRatio, setAspectRatio] = useState<string>('1:1');
+  const [aspectRatio, setAspectRatio] = useState<string>(type === 'ugc' ? '9:16' : '1:1');
   const [variations, setVariations] = useState(1);
   const [duration, setDuration] = useState(5);
   const [resolution, setResolution] = useState<string>(
-    type === 'video' ? '1080p' : caps.resolutions[0]
+    type === 'video' ? '1080p' : caps.resolutions[0] ?? ''
   );
-  const [quality, setQuality] = useState<string>(caps.qualities[caps.qualities.length - 1] ?? 'medium');
+  // UGC defaults to the cheaper tier; images default to their best.
+  const [quality, setQuality] = useState<string>(
+    type === 'ugc' ? 'std' : caps.qualities[caps.qualities.length - 1] ?? 'medium'
+  );
+  const [sound, setSound] = useState(true);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [status, setStatus] = useState<string>('');
@@ -97,6 +117,7 @@ export default function GenerationInterface({ title, description, type, requires
   const styleFileInputRef = useRef<HTMLInputElement>(null);
 
   const getBaseCost = () => {
+    if (type === 'ugc') return ugcCreditsPerSecond(quality, sound) * duration;
     if (type === 'video') return videoCreditsPerSecond(resolution) * duration;
     return imageCreditsFor(type as ImageFeature, quality, resolution);
   };
@@ -225,7 +246,10 @@ export default function GenerationInterface({ title, description, type, requires
             variations,
             quality,
             resolution,
-            duration: type === 'video' ? duration : undefined
+            duration: isVideoLike(type) ? duration : undefined,
+            // UGC tiers quality through `mode`, and generates audio only on request.
+            mode: type === 'ugc' ? quality : undefined,
+            sound: type === 'ugc' ? sound : undefined
           }
         })
       });
@@ -262,7 +286,11 @@ export default function GenerationInterface({ title, description, type, requires
           <div style={{ display: 'flex', gap: '1rem' }}>
               <div className={styles.formGroup} style={{ flex: 1 }}>
                 <label>
-                  {type === 'video' ? 'Source Image' : 'Product Image'}{' '}
+                  {type === 'ugc'
+                    ? 'Product Reference'
+                    : type === 'video'
+                      ? 'Source Image'
+                      : 'Product Image'}{' '}
                   <span style={{ color: 'var(--text-secondary)' }}>
                     {requiresImage ? '(Required)' : '(Optional)'}
                   </span>
@@ -304,6 +332,13 @@ export default function GenerationInterface({ title, description, type, requires
               )}
             </div>
           
+          {type === 'ugc' && (
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '-0.5rem 0 0' }}>
+              Your image is used as a product reference, not as the first frame — the clip opens
+              already inside the scene, with the product kept faithful to the photo.
+            </p>
+          )}
+
           <div className={styles.formGroup}>
             <label>Prompt</label>
             <textarea 
@@ -357,7 +392,7 @@ export default function GenerationInterface({ title, description, type, requires
 
             {caps.qualities.length > 0 && (
             <div className={styles.formGroup}>
-              <label>Quality</label>
+              <label>{type === 'ugc' ? 'Quality - Kling O3' : 'Quality'}</label>
               <div className={styles.segmentedControl}>
                 {caps.qualities.map(q => (
                   <button 
@@ -369,13 +404,32 @@ export default function GenerationInterface({ title, description, type, requires
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
                       <path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13"/><path d="M13 3l3 6-4 13"/>
                     </svg>
-                    {q}
+                    {type === 'ugc' ? UGC_MODE_LABELS[q] : q}
                   </button>
                 ))}
               </div>
             </div>
             )}
 
+            {type === 'ugc' && (
+            <div className={styles.formGroup}>
+              <label>Sound</label>
+              <div className={styles.segmentedControl}>
+                {[true, false].map(on => (
+                  <button
+                    type="button"
+                    key={String(on)}
+                    className={`${styles.segmentBtn} ${sound === on ? styles.active : ''}`}
+                    onClick={() => setSound(on)}
+                  >
+                    {on ? 'On' : 'Silent'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            )}
+
+            {caps.resolutions.length > 0 && (
             <div className={styles.formGroup}>
               <label>{videoTierLabel ? `Quality - ${videoTierLabel}` : 'Resolution'}</label>
               <div className={styles.segmentedControl}>
@@ -394,8 +448,9 @@ export default function GenerationInterface({ title, description, type, requires
                 ))}
               </div>
             </div>
+            )}
 
-            {type === 'video' && (
+            {isVideoLike(type) && (
               <div className={styles.formGroup}>
                 <label>Duration</label>
                 <select 
@@ -417,6 +472,7 @@ export default function GenerationInterface({ title, description, type, requires
           
           <div className={styles.smallCostText}>
             Generating will use <span>{totalCost} credits</span>
+            {type === 'ugc' && ` · ${UGC_MODEL_LABEL}`}
           </div>
           
           {status && <div className={styles.status}>{status}</div>}
@@ -438,7 +494,7 @@ export default function GenerationInterface({ title, description, type, requires
         ) : resultUrls.length > 0 ? (
           <div className={styles.resultsGrid}>
             {resultUrls.map((url, i) => (
-              type === 'video' ? (
+              isVideoLike(type) ? (
                 <video key={i} src={url} controls autoPlay loop className={styles.resultMedia} />
               ) : (
                 <img key={i} src={url} alt={`Result ${i+1}`} className={styles.resultMedia} />
