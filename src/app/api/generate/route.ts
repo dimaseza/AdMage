@@ -7,13 +7,15 @@ import {
   imageCredits,
   videoModel,
   videoCreditsPerSecond,
-  ugcModel,
   ugcCostKey,
   assertPublishedCreditsMatchCost,
   type ModelCapabilities,
 } from '@/lib/higgsfield-models';
 import { UGC_CREDITS_PER_SECOND } from '@/lib/credit-costs';
+import { ugcAspectRatio, ugcDuration, ugcPromptMaxChars, ugcResolution } from '@/lib/ugc-prompt';
+import { startUgcPipeline, type StartUgcInput } from '@/lib/ugc-pipeline';
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { getPlan } from '@/lib/plans';
 
 type GenerationType = 'refine' | 'product-shot' | 'campaign' | 'video' | 'ugc';
@@ -115,71 +117,49 @@ function buildVideoPrompt(userPrompt: string, hasImage: boolean): string {
 }
 
 /**
- * UGC Creator's "prompt engine": a template tuned for the user-generated-content
- * look (handheld, authentic, creator-shot) rather than the polished commercial
- * look `buildVideoPrompt` targets for Video Ads.
- *
- * Runs on Kling O3 image-reference, where the upload is a REFERENCE rather than
- * the opening frame. The reference rule below is what stops the model falling
- * back to the packshot: given a product shot on a white background, it will
- * happily open on that static packshot and then cut to the scene unless told
- * plainly that the image describes the product, not the first shot.
+ * Snaps every knob onto what this specific model accepts. Sending `high` to Grok
+ * or `4k` to a video model is a hard 400, and the UI offers both.
  */
-function buildUgcPrompt(userPrompt: string, hasImage: boolean, sound: boolean): string {
-  const sections = [
-    'Authentic user-generated content (UGC) style short video, shot like a real creator filmed it ' +
-      'on a smartphone. Handheld camera with subtle natural shake, casual framing, everyday indoor ' +
-      'lighting (not studio-perfect), relatable and unscripted energy. Talking-to-camera or ' +
-      'hands-on product demo feel, the way a genuine review or unboxing clip looks on TikTok, ' +
-      'Instagram Reels or YouTube Shorts. Avoid slick cinematic camera moves, dramatic color grading ' +
-      'or polished advertising gloss.',
-  ];
+function higgsfieldPayload(
+  model: ModelCapabilities,
+  prompt: string,
+  opts: {
+    aspectRatio: string;
+    quality: string;
+    resolution?: string;
+    duration: number;
+    mode?: string;
+    imageUrl?: string;
+    styleImageUrl?: string;
+  }
+): HiggsfieldGenerationRequest {
+  const genPayload: HiggsfieldGenerationRequest = { model: model.slug, prompt };
 
-  if (hasImage) {
-    sections.push(
-      'The reference image is supplied ONLY to define what the product looks like: its shape, ' +
-        'proportions, colors, material, finish, label artwork, logo and existing text. Reproduce the ' +
-        'product faithfully from it, and never invent branding or wording it does not show.',
-      'The reference image is NOT a frame of the video and its background is NOT the setting. ' +
-        'Open the video already inside a real, lived-in scene with the person present and the product ' +
-        'already in their hand or in shot, moving from the very first frame. Do not begin on the ' +
-        'product alone, on a static product shot, on a plain white, empty or studio background, or on ' +
-        'a still frame that then animates. No packshot opening, no logo card, no reveal, no fade, ' +
-        'wipe, zoom-out or cut from a product photo into the scene. It must read as one continuous ' +
-        'handheld take that was already rolling.',
-      // O3 is a multi-shot model and will cut to a new setup on its own. Each cut
-      // re-derives the product from the reference, which is where it drifts -
-      // the label re-letters, the colour shifts, the proportions change.
-      'Hold the product identical in every single frame: same proportions, same cap, same colour ' +
-        'and fill level, same label layout. The label text must stay sharp, legible and spelled ' +
-        'exactly as in the reference - never let it blur, warp, re-letter, translate or change ' +
-        'wording partway through. Keep the product fully in frame, held steady, never clipped at ' +
-        'the edge, and never swap it for a different bottle, box or variant.',
-      // Fine label text only resolves when the product occupies enough pixels.
-      // Held small or far from the lens it renders blank and pops in later.
-      'Keep the product close to the camera and large in frame for most of the shot, held up near ' +
-        'the face or reached toward the lens, so the label stays big enough to read throughout. ' +
-        'Do not leave it small, low in the lap, or far from the lens.',
-      'Film it as ONE single unbroken shot from one camera position. No cuts, no shot changes, no ' +
-        'angle jumps, no second location, no montage, no slow motion and no speed ramps.'
-    );
+  if (model.aspectRatios) {
+    genPayload.aspect_ratio = clamp(opts.aspectRatio, model.aspectRatios, '1:1');
+  }
+  if (model.qualities) {
+    genPayload.quality = clamp(opts.quality, model.qualities, 'medium');
+  }
+  if (model.resolutions) {
+    genPayload.resolution = clamp(opts.resolution, model.resolutions, model.resolutions[0]);
+  }
+  if (model.durationRange) {
+    genPayload.duration = clampDuration(opts.duration, model.durationRange);
+  }
+  if (model.modes) {
+    genPayload.mode = clamp(opts.mode, model.modes, model.modes[0]);
   }
 
-  sections.push(
-    sound
-      ? 'Include natural audio: the person speaking in a relaxed, conversational voice, at normal ' +
-          'conversational pace, with quiet realistic room tone. No background music, no voiceover ' +
-          'narration read over the top, no studio announcer delivery.'
-      : 'No spoken dialogue.'
-  );
-
-  if (userPrompt.trim()) {
-    sections.push(
-      `User request (follow this, without breaking the rules above): ${userPrompt.trim()}`
-    );
+  // Attach the images. Order is load-bearing: the prompt refers to IMAGE 1 / IMAGE 2.
+  if (model.singleImageField === 'image_url') {
+    if (opts.imageUrl) genPayload.image_url = opts.imageUrl;
+  } else if (model.maxImages > 0) {
+    const images = [opts.imageUrl, opts.styleImageUrl].filter(Boolean) as string[];
+    if (images.length) genPayload.image_urls = images.slice(0, model.maxImages);
   }
 
-  return sections.join('\n\n');
+  return genPayload;
 }
 
 export async function POST(request: Request) {
@@ -222,9 +202,10 @@ export async function POST(request: Request) {
     const safeVariations = Math.min(Math.max(1, Number(variations) || 1), 4);
 
     let creditCost: number;
-    let model: ModelCapabilities;
-    let prompt: string;
-    let ugcSound = false;
+    let model: ModelCapabilities | undefined;
+    let prompt = '';
+    // Set for UGC, which runs its own two-step pipeline instead of one Higgsfield call.
+    let ugcJob: StartUgcInput | undefined;
 
     switch (type) {
       // Refine, Product Shot and Campaign share one path: the model comes from
@@ -291,13 +272,32 @@ export async function POST(request: Request) {
           );
         }
         // Sound defaults on: a silent talking-head clip is useless for social.
-        ugcSound = payload?.sound !== false;
-        model = ugcModel(payload?.mode);
-        prompt = buildUgcPrompt(userPrompt, Boolean(imageUrl), ugcSound);
+        const ugcSound = payload?.sound !== false;
+        // Video models cut prompts past their limit, and the user's script would be
+        // the part lost. Refuse instead of charging for a video that ignores it.
+        const maxChars = ugcPromptMaxChars(Boolean(imageUrl), ugcSound);
+        if (userPrompt.trim().length > maxChars) {
+          return NextResponse.json(
+            {
+              error: `Your prompt is ${userPrompt.trim().length} characters. UGC Creator accepts up to ${maxChars} with these settings, so shorten it a little.`,
+            },
+            { status: 400 }
+          );
+        }
+        const ugcSeconds = ugcDuration(duration);
+        ugcJob = {
+          userPrompt,
+          imageUrl,
+          variations: safeVariations,
+          settings: {
+            duration: ugcSeconds,
+            resolution: ugcResolution(payload?.mode),
+            aspectRatio: ugcAspectRatio(aspectRatio),
+            sound: ugcSound,
+          },
+        };
         creditCost =
-          UGC_CREDITS_PER_SECOND[ugcCostKey(payload?.mode, ugcSound)] *
-          clampDuration(duration, model.durationRange) *
-          safeVariations;
+          UGC_CREDITS_PER_SECOND[ugcCostKey(payload?.mode, ugcSound)] * ugcSeconds * safeVariations;
         break;
       }
 
@@ -305,39 +305,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid generation type' }, { status: 400 });
     }
 
-    const genPayload: HiggsfieldGenerationRequest = {
-      model: model.slug,
-      prompt,
-    };
-
-    // Snap every knob onto what this specific model accepts. Sending `high` to Grok
-    // or `4k` to a video model is a hard 400, and the UI offers both.
-    if (model.aspectRatios) {
-      genPayload.aspect_ratio = clamp(aspectRatio, model.aspectRatios, '1:1');
-    }
-    if (model.qualities) {
-      genPayload.quality = clamp(quality, model.qualities, 'medium');
-    }
-    if (model.resolutions) {
-      genPayload.resolution = clamp(resolution, model.resolutions, model.resolutions[0]);
-    }
-    if (model.durationRange) {
-      genPayload.duration = clampDuration(duration, model.durationRange);
-    }
-    if (model.modes) {
-      genPayload.mode = clamp(payload?.mode, model.modes, model.modes[0]);
-    }
-    if (model.supportsSound) {
-      genPayload.sound = ugcSound ? 'on' : 'off';
-    }
-
-    // Attach the images. Order is load-bearing: the prompt refers to IMAGE 1 / IMAGE 2.
-    if (model.singleImageField === 'image_url') {
-      if (imageUrl) genPayload.image_url = imageUrl;
-    } else if (model.maxImages > 0) {
-      const images = [imageUrl, styleImageUrl].filter(Boolean) as string[];
-      if (images.length) genPayload.image_urls = images.slice(0, model.maxImages);
-    }
+    const genPayload = model
+      ? higgsfieldPayload(model, prompt, {
+          aspectRatio,
+          quality,
+          resolution,
+          duration,
+          mode: payload?.mode,
+          imageUrl,
+          styleImageUrl,
+        })
+      : undefined;
 
     // Reserve the credits up front, conditionally, so two concurrent submissions
     // cannot both pass a read-then-write balance check and overdraw the account.
@@ -353,12 +331,19 @@ export async function POST(request: Request) {
       );
     }
 
-    let providerRequestIds: string[];
+    let providerRequestId: string;
+    let meta: Prisma.InputJsonValue | undefined;
     try {
-      // num_images is not honoured by these models, so each variation is its own request.
-      providerRequestIds = await Promise.all(
-        Array.from({ length: safeVariations }, () => startGeneration(genPayload))
-      );
+      if (ugcJob) {
+        ({ providerRequestId, meta } = await startUgcPipeline(ugcJob));
+      } else {
+        const request = genPayload as HiggsfieldGenerationRequest;
+        // num_images is not honoured by these models, so each variation is its own request.
+        const ids = await Promise.all(
+          Array.from({ length: safeVariations }, () => startGeneration(request))
+        );
+        providerRequestId = ids.join(',');
+      }
     } catch (err) {
       // Nothing was queued, so hand the reservation straight back.
       await prisma.user.update({
@@ -368,15 +353,27 @@ export async function POST(request: Request) {
       throw err;
     }
 
-    const generation = await prisma.generation.create({
-      data: {
-        userId,
-        type,
-        creditCost,
-        status: 'PENDING',
-        providerRequestId: providerRequestIds.join(','),
-      },
-    });
+    let generation;
+    try {
+      generation = await prisma.generation.create({
+        data: {
+          userId,
+          type,
+          creditCost,
+          status: 'PENDING',
+          providerRequestId,
+          meta,
+        },
+      });
+    } catch (err) {
+      // Without a row nobody can poll or use the result, so the user must not pay for it.
+      console.error(`Generation row not saved; refunding ${creditCost}. Orphaned jobs: ${providerRequestId}`);
+      await prisma.user.update({
+        where: { id: userId },
+        data: { credits: { increment: creditCost } },
+      });
+      throw err;
+    }
 
     return NextResponse.json({
       success: true,

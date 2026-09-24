@@ -74,9 +74,8 @@ export const VIDEO_TIER_LABELS: Record<string, string> = {
 };
 
 /**
- * UGC Creator runs on Kling O3 image-reference, which costs more per second than
- * the v3.0 Standard endpoint Video Ads uses. Both `pro` and generated sound add
- * a third to the per-second cost, and they stack. See higgsfield-models.ts.
+ * UGC Creator credit rates. It now runs on Veo 3.1 Lite (see ugc-pipeline.ts);
+ * these rates were set for Kling O3 and have not been repriced.
  */
 export const UGC_CREDITS_PER_SECOND: Record<string, number> = {
   'std:off': 7,
@@ -85,13 +84,13 @@ export const UGC_CREDITS_PER_SECOND: Record<string, number> = {
   'pro:on': 12,
 };
 
-export const UGC_MODEL_LABEL = 'Kling O3 Reference';
+export const UGC_MODEL_LABEL = 'Veo 3.1 Lite';
 
 export const UGC_MODES = ['std', 'pro'] as const;
 
 export const UGC_MODE_LABELS: Record<string, string> = {
-  std: 'Standard',
-  pro: 'Pro',
+  std: 'Standard 720p',
+  pro: 'Pro 1080p',
 };
 
 export function resolveUgcMode(mode: string | undefined): string {

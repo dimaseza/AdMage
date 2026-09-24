@@ -33,7 +33,15 @@ export type Plan = {
   /** Number of custom LoRA trainings included. */
   customLora?: number;
   priorityQueue?: boolean;
+  /** Prompt Builder prompts per day. Free to use (no credits), so this is the only gate. */
+  promptsPerDay: number;
+  /** Prompt Builder product-photo analyses per day (double the prompt limit). */
+  photoAnalysesPerDay: number;
 };
+
+/** Prompt Builder daily limits: 3 prompts on Free, 15 on every paid plan. */
+const FREE_PROMPT_LIMITS = { promptsPerDay: 3, photoAnalysesPerDay: 6 };
+const PAID_PROMPT_LIMITS = { promptsPerDay: 15, photoAnalysesPerDay: 30 };
 
 export const PLANS: Plan[] = [
   {
@@ -43,6 +51,7 @@ export const PLANS: Plan[] = [
     credits: 100,
     allowsVideo: false,
     tagline: 'Try the image tools, no card needed',
+    ...FREE_PROMPT_LIMITS,
   },
   {
     id: 'STARTER',
@@ -51,6 +60,7 @@ export const PLANS: Plan[] = [
     credits: 200,
     allowsVideo: true,
     tagline: 'For solo sellers getting started',
+    ...PAID_PROMPT_LIMITS,
   },
   {
     id: 'PRO',
@@ -60,6 +70,7 @@ export const PLANS: Plan[] = [
     allowsVideo: true,
     tagline: 'For active shops posting weekly',
     popular: true,
+    ...PAID_PROMPT_LIMITS,
   },
   {
     id: 'BUSINESS',
@@ -69,6 +80,7 @@ export const PLANS: Plan[] = [
     allowsVideo: true,
     tagline: 'For brands running paid campaigns',
     customLora: 1,
+    ...PAID_PROMPT_LIMITS,
   },
   {
     id: 'ENTERPRISE',
@@ -79,6 +91,7 @@ export const PLANS: Plan[] = [
     tagline: 'For agencies managing many clients',
     customLora: 3,
     priorityQueue: true,
+    ...PAID_PROMPT_LIMITS,
   },
 ];
 
@@ -179,6 +192,11 @@ export function comparisonRows(): ComparisonRow[] {
       label: 'Video ads',
       hint: `${STANDARD_COST.video} credits per 5s clip`,
       values: PLANS.map((p, i) => (p.allowsVideo ? `${a[i].video} clips` : DASH)),
+    },
+    {
+      label: 'Prompt Builder',
+      hint: 'Free, no credits',
+      values: PLANS.map((p) => `${p.promptsPerDay} / day`),
     },
     {
       label: 'Custom LoRA',

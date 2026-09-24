@@ -16,7 +16,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  generations Generation[]
+  generations   Generation[]
+  promptEntries PromptEntry[]
 }
 
 model Generation {
@@ -27,7 +28,45 @@ model Generation {
   resultUrl         String?
   resultUrls        String[] @default([])
   providerRequestId String?
+  /// Multi-step pipelines (UGC Creator: frame image -> video) keep their settings here.
+  meta              Json?
   creditCost        Int
   status            String   @default("PENDING")
   createdAt         DateTime @default(now())
+}
+
+/// A saved Prompt Builder result (the Prompt Library).
+model PromptEntry {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id])
+  /// "image" now, "video" in phase 2.
+  kind       String   @default("image")
+  /// ugc | product-shot | campaign
+  mode       String
+  title      String
+  /// What the user typed into the form.
+  brief      Json
+  /// The structured JSON the model filled in.
+  promptJson Json
+  /// The single flowing paragraph the user copies.
+  promptText String
+  favorite   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Per-user, per-day counters for the Prompt Builder daily limits.
+/// Kept apart from PromptEntry so deleting a library entry cannot reset a limit.
+model PromptUsage {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  /// Calendar day in WIB (UTC+7), e.g. "2026-09-24".
+  day    String
+  /// prompt | photo
+  kind   String
+  count  Int    @default(0)
+
+  @@unique([userId, day, kind])
 }

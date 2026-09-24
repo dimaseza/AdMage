@@ -13,6 +13,7 @@ export default function SidebarNav() {
     { href: '/dashboard/campaign', label: 'Campaigns' },
     { href: '/dashboard/video', label: 'Video Ads' },
     { href: '/dashboard/ugc', label: 'UGC Creator' },
+    { href: '/dashboard/prompt-builder', label: 'Prompt Builder' },
     { href: '/dashboard/gallery', label: 'Gallery' },
   ];
 

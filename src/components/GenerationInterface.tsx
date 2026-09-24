@@ -21,6 +21,7 @@ import {
   imageCreditsFor,
   type ImageFeature,
 } from '@/lib/credit-costs';
+import { UGC_ASPECT_RATIOS, UGC_DURATIONS, UGC_PROMPT_MAX_CHARS, ugcPromptMaxChars } from '@/lib/ugc-prompt';
 
 interface GenerationInterfaceProps {
   title: string;
@@ -69,13 +70,11 @@ const FEATURE_CAPS = {
     supportsStyleRef: false,
   },
   ugc: {
-    // Kling O3 takes its tier as a `mode` body field (std/pro), not a `quality`
-    // or `resolution` field, so this picker drives `mode`.
+    // The tier picks the output resolution (std 720p, pro 1080p) and is sent as `mode`.
     qualities: UGC_MODES as readonly string[],
     resolutions: [] as readonly string[],
-    // UGC clips are made for vertical social feeds first. Unlike plain
-    // image-to-video, O3 image-reference actually honours this with an image attached.
-    aspectRatios: ['9:16', '1:1', '16:9'],
+    // UGC clips are made for vertical social feeds first. Veo only does 9:16 and 16:9.
+    aspectRatios: UGC_ASPECT_RATIOS as readonly string[],
     supportsStyleRef: false,
   },
 } as const;
@@ -96,7 +95,7 @@ export default function GenerationInterface({ title, description, type, requires
   // Advanced Settings
   const [aspectRatio, setAspectRatio] = useState<string>(type === 'ugc' ? '9:16' : '1:1');
   const [variations, setVariations] = useState(1);
-  const [duration, setDuration] = useState(5);
+  const [duration, setDuration] = useState(type === 'ugc' ? 6 : 5);
   const [resolution, setResolution] = useState<string>(
     type === 'video' ? '1080p' : caps.resolutions[0] ?? ''
   );
@@ -122,6 +121,10 @@ export default function GenerationInterface({ title, description, type, requires
     return imageCreditsFor(type as ImageFeature, quality, resolution);
   };
   const totalCost = getBaseCost() * variations;
+  // UGC prompts share Kling's length budget with the built-in rules; the limit
+  // depends on whether a reference image and sound are included.
+  const ugcMaxChars = type === 'ugc' ? ugcPromptMaxChars(Boolean(file), sound) : null;
+  const ugcPromptTooLong = ugcMaxChars !== null && prompt.trim().length > ugcMaxChars;
   const videoTierLabel = type === 'video' ? VIDEO_TIER_LABELS[resolveVideoTier(resolution)] : null;
 
   useEffect(() => {
@@ -143,6 +146,10 @@ export default function GenerationInterface({ title, description, type, requires
           clearInterval(interval);
           // A failed generation refunds its reservation.
           refreshCredits();
+        } else if (data.stage === 'frame') {
+          setStatus('Step 1 of 2: composing the opening shot with your product...');
+        } else if (data.stage === 'video') {
+          setStatus('Step 2 of 2: animating and recording the voice...');
         } else {
           setStatus(`Status: ${data.status}...`);
         }
@@ -334,19 +341,43 @@ export default function GenerationInterface({ title, description, type, requires
           
           {type === 'ugc' && (
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '-0.5rem 0 0' }}>
-              Your image is used as a product reference, not as the first frame — the clip opens
-              already inside the scene, with the product kept faithful to the photo.
+              Your photo is used to compose the opening shot with the product already in hand,
+              which is then animated with speech. Speech works in Indonesian and English.
             </p>
           )}
 
           <div className={styles.formGroup}>
-            <label>Prompt</label>
-            <textarea 
-              className={styles.textarea} 
-              value={prompt} 
-              onChange={e => setPrompt(e.target.value)} 
-              placeholder="Describe your creative vision in detail..."
+            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Prompt</span>
+              {ugcMaxChars !== null && (
+                <span
+                  style={{
+                    fontWeight: 400,
+                    fontSize: '0.8rem',
+                    color: ugcPromptTooLong ? 'var(--error)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {prompt.trim().length}/{ugcMaxChars}
+                </span>
+              )}
+            </label>
+            <textarea
+              className={styles.textarea}
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              maxLength={type === 'ugc' ? UGC_PROMPT_MAX_CHARS : undefined}
+              placeholder={
+                type === 'ugc'
+                  ? 'Paste a UGC Video prompt from Prompt Builder, or describe the person, setting, what they do and say...'
+                  : 'Describe your creative vision in detail...'
+              }
             />
+            {ugcPromptTooLong && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--error)', margin: 0 }}>
+                Too long for these settings. Shorten it by {prompt.trim().length - (ugcMaxChars ?? 0)} characters
+                so the whole prompt reaches the video model.
+              </p>
+            )}
           </div>
 
           {aspectRatios.length > 0 && (
@@ -392,7 +423,7 @@ export default function GenerationInterface({ title, description, type, requires
 
             {caps.qualities.length > 0 && (
             <div className={styles.formGroup}>
-              <label>{type === 'ugc' ? 'Quality - Kling O3' : 'Quality'}</label>
+              <label>{type === 'ugc' ? `Quality - ${UGC_MODEL_LABEL}` : 'Quality'}</label>
               <div className={styles.segmentedControl}>
                 {caps.qualities.map(q => (
                   <button 
@@ -458,7 +489,7 @@ export default function GenerationInterface({ title, description, type, requires
                   value={duration} 
                   onChange={(e) => setDuration(Number(e.target.value))}
                 >
-                  {VIDEO_DURATIONS.map(d => (
+                  {(type === 'ugc' ? UGC_DURATIONS : VIDEO_DURATIONS).map(d => (
                     <option key={d} value={d}>{d} Seconds</option>
                   ))}
                 </select>
@@ -466,7 +497,7 @@ export default function GenerationInterface({ title, description, type, requires
             )}
           </div>
           
-          <button style={{ marginTop: '0.5rem' }} type="submit" className="btn-primary" disabled={isGenerating}>
+          <button style={{ marginTop: '0.5rem' }} type="submit" className="btn-primary" disabled={isGenerating || ugcPromptTooLong}>
             {isGenerating ? 'Generating...' : 'Generate Content'}
           </button>
           
